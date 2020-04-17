@@ -7,6 +7,7 @@ let cookieParser = require('cookie-parser');
 let session = require('express-session');
 let flash = require('express-flash');
 let passport = require('passport');
+let axios = require('axios');
 
 // Express app creation
 const app = express();
@@ -57,17 +58,52 @@ app.use('/', express.static(__dirname+'/public'));
 // Routes
 app.use('/', webRoutes);
 
+//variables para el juego
+let jugadores = [];
+let sockets = [];
+let abecedario = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+let letra = '';
+let enJuego = false;
+
+//Implementacion para la logica del servidor con el juego a partir de aqui
 io.on('connection', (socket) => {
   console.log('Client coneected');
-  let i = 0;
+  //sacar un nombre random lol
+  axios.get("https://random-word-api.herokuapp.com/word?number=1")
+  .then((response) => {
+    var newPlayer = response.data[0];
+    jugadores.push(newPlayer);
+    sockets.push(socket);
+    socket.emit('welcome', {name : newPlayer, jugadores : jugadores, enJuego : enJuego, letra : letra});
+    socket.broadcast.emit('newPlayer', {jugadores : jugadores});
+  });
+  socket.on('startGame', () => {
+    letra = abecedario[Math.floor((Math.random() * 26))]; //del 0 a 25 del arreglo del abecedario
+    enJuego = true; //Inicio del juego
+    socket.emit('startGame', {letra : letra}); //mandar la letra y empezar el juego
+    socket.broadcast.emit('startGame', {letra : letra}); //broadcast a todos de la letra
+  });
+  socket.on('stopGame', () => {
+    enJuego = false;
+    socket.emit('stopGame');
+    socket.broadcast.emit('stopGame');
+  })
+  socket.on('disconnect', () => {
+    var i = sockets.indexOf(socket);
+    var disconnectedPlayer = jugadores[i];
+    jugadores.splice(i,1);
+    sockets.splice(i, 1);
+    socket.broadcast.emit('playerDisconnect', {name : disconnectedPlayer, jugadores : jugadores});
+  });
+  /*let i = 0;
   setInterval(() => {
-    socket.emit('toat', {message: 'mensaje' + i});
+    socket.emit('toast', {message: 'mensaje' + i});
     i++;
   }, 1000);
   socket.on('message-to-server', (data) => {
     console.log('message received: ', data);
   })
-  
+  */
 })
 
 // App init
